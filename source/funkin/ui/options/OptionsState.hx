@@ -17,6 +17,9 @@ import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
 import funkin.graphics.shaders.HSVShader;
 import funkin.input.Controls;
+#if FEATURE_DEBUG_MENU
+import funkin.ui.debug.DebugMenuSubState;
+#end
 #if FEATURE_NEWGROUNDS
 import funkin.api.newgrounds.NewgroundsClient;
 #end
@@ -70,6 +73,14 @@ class OptionsState extends MusicBeatState
     add(optionsCodex);
 
     var options:OptionsMenu = optionsCodex.addPage(Options, new OptionsMenu());
+    #if FEATURE_DEBUG_MENU
+    // The debug menu moves the main camera, so put it back where the options menu expects it.
+    subStateClosed.add(_ ->
+    {
+      persistentUpdate = true;
+      options.restoreCamera();
+    });
+    #end
     var preferences:PreferencesMenu = optionsCodex.addPage(Preferences, new PreferencesMenu());
     var controls:ControlsMenu = optionsCodex.addPage(Controls, new ControlsMenu());
     #if FEATURE_LAG_ADJUSTMENT
@@ -206,6 +217,13 @@ class OptionsMenu extends Page<OptionsMenuPageName>
       }
     });
     #end
+    #if FEATURE_DEBUG_MENU
+    createItem('DEBUG MENU', function()
+    {
+      FlxG.state.persistentUpdate = false;
+      FlxG.state.openSubState(new DebugMenuSubState());
+    });
+    #end
     #if FEATURE_MOBILE_IAP
     createItem('RESTORE PURCHASES', function()
     {
@@ -258,9 +276,7 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     add(camFocusPoint);
 
     // Follow the camera focus as we scroll.
-    FlxG.camera.follow(camFocusPoint, null, 0.085);
-    FlxG.camera.deadzone.set(0, CAMERA_MARGIN / 2, FlxG.camera.width, FlxG.camera.height - CAMERA_MARGIN + 40);
-    FlxG.camera.minScrollY = -CAMERA_MARGIN / 2;
+    restoreCamera();
 
     // Move the camera when the menu is scrolled.
     items.onChange.add(onMenuChange);
@@ -271,6 +287,19 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     #if FEATURE_TOUCH_CONTROLS
     FlxG.touches.swipeThreshold.y = 100;
     #end
+  }
+
+  /**
+   * Points the main camera back at this menu's focus point.
+   * Needed after a substate (like the debug menu) took control of the camera.
+   */
+  public function restoreCamera():Void
+  {
+    FlxG.camera.follow(camFocusPoint, null, 0.085);
+    FlxG.camera.deadzone.set(0, CAMERA_MARGIN / 2, FlxG.camera.width, FlxG.camera.height - CAMERA_MARGIN + 40);
+    FlxG.camera.minScrollY = -CAMERA_MARGIN / 2;
+
+    if (items != null && items.selectedItem != null) onMenuChange(items.selectedItem);
   }
 
   public function addSaveDataOptionsItem(saveDataMenu:SaveDataMenu):Void
@@ -294,7 +323,7 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     #if NO_FEATURE_TOUCH_CONTROLS
     createItem('EXIT', exit);
     #else
-    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exit, 1.0);
+    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exit, 1.0);
     backButton.onConfirmStart.add(function()
     {
       items.busy = true;

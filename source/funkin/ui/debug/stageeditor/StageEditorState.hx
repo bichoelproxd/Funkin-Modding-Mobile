@@ -496,14 +496,12 @@ class StageEditorState extends UIState
 
         var files = sys.FileSystem.readDirectory(BACKUPS_PATH);
         var filestats:Array<sys.FileStat> = [];
-        if (files.length > 0)
+        // Drop everything that isn't a stage editor backup, starting from the end.
+        // The length check has to come first, otherwise we'd read `files[-1]` once the array is empty.
+        while (files.length > 0
+          && (!files[files.length - 1].endsWith(FileUtil.FILE_FILTER_FNFS.extension) || !files[files.length - 1].startsWith('stage-editor-')))
         {
-          while (!files[files.length - 1].endsWith(FileUtil.FILE_FILTER_FNFS.extension)
-            || !files[files.length - 1].startsWith('stage-editor-'))
-          {
-            if (files.length == 0) break;
-            files.pop();
-          }
+          files.pop();
         }
 
         var latestBackupPath:Null<String> = files[0];
@@ -539,6 +537,11 @@ class StageEditorState extends UIState
       startingVolume: 0.0
     });
     FlxG.sound.music.fadeIn(10, 0, 1);
+
+    #if FEATURE_TOUCH_CONTROLS
+    // Touch toolbar: modifiers, undo/redo, scroll, zoom, right click...
+    funkin.ui.debug.EditorMobileOverlay.attach(this);
+    #end
   }
 
   var curTestChar:Int = 0;

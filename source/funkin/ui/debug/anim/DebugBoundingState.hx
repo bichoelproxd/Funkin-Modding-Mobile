@@ -117,6 +117,11 @@ class DebugBoundingState extends FlxState
     Cursor.show();
 
     super.create();
+
+    #if (FEATURE_HAXEUI && FEATURE_TOUCH_CONTROLS)
+    // Touch toolbar: modifiers, undo/redo, scroll, zoom, right click...
+    funkin.ui.debug.EditorMobileOverlay.attach(this);
+    #end
   }
 
   var bf:FlxSprite;

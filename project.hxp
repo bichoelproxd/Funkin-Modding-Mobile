@@ -204,6 +204,13 @@ class Project extends HXProject
   static final EXCLUDE_ARMV7:FeatureFlag = "EXCLUDE_ARMV7";
 
   /**
+   * `-DEXCLUDE_ARM64`
+   * If this flag is enabled, arm64 won't be compiled when building android.
+   * Used to produce an armeabi-v7a only APK.
+   */
+  static final EXCLUDE_ARM64:FeatureFlag = "EXCLUDE_ARM64";
+
+  /**
    * `-DFORCE_BLEND_SHADER`
    * If this flag is enabled, the game will force the use of shaders to render
    * certain blend modes, even if the device supports the needed OpenGL extensions.
@@ -690,6 +697,11 @@ class Project extends HXProject
         this.excludeArchitectures.push(Architecture.ARMV7);
       }
 
+      if (EXCLUDE_ARM64.isEnabled(this))
+      {
+        this.excludeArchitectures.push(Architecture.ARM64);
+      }
+
       if (isRelease())
       {
         if (envConfig != null)
@@ -824,6 +836,7 @@ class Project extends HXProject
     // Should be false unless explicitly requested.
     GITHUB_BUILD.apply(this, false);
     EXCLUDE_ARMV7.apply(this, false);
+    EXCLUDE_ARM64.apply(this, false);
 
     // Should be true unless explicitly requested.
     HARDCODED_CREDITS.apply(this, true);
@@ -883,12 +896,12 @@ class Project extends HXProject
     FEATURE_NEWGROUNDS_AUTOLOGIN.apply(this, FEATURE_NEWGROUNDS.isEnabled(this) && isWeb());
     FEATURE_NEWGROUNDS_EVENTS.apply(this, FEATURE_NEWGROUNDS.isEnabled(this));
 
-    // Should be true except on web and mobile builds.
-    // Debug editors aren't built to work on web or mobile right now.
-    FEATURE_DEBUG_MENU.apply(this, !(isWeb() || isMobile()));
-    FEATURE_ANIMATION_EDITOR.apply(this, !(isWeb() || isMobile()));
-    FEATURE_CHART_EDITOR.apply(this, !(isWeb() || isMobile()));
-    FEATURE_STAGE_EDITOR.apply(this, !(isWeb() || isMobile()));
+    // Should be true except on web builds.
+    // The debug editors now have touch support, so they are enabled on mobile too.
+    FEATURE_DEBUG_MENU.apply(this, !isWeb());
+    FEATURE_ANIMATION_EDITOR.apply(this, !isWeb());
+    FEATURE_CHART_EDITOR.apply(this, !isWeb());
+    FEATURE_STAGE_EDITOR.apply(this, !isWeb());
     FEATURE_HAXEUI.apply(this, FEATURE_ANIMATION_EDITOR.isEnabled(this)
       || FEATURE_CHART_EDITOR.isEnabled(this)
       || FEATURE_STAGE_EDITOR.isEnabled(this));

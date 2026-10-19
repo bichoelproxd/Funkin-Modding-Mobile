@@ -2567,6 +2567,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
       }
     }
 
+    #if (FEATURE_HAXEUI && FEATURE_TOUCH_CONTROLS)
+    // Touch toolbar: modifiers, undo/redo, scroll, zoom, right click...
+    funkin.ui.debug.EditorMobileOverlay.attach(this);
+    #end
+
     #if FEATURE_DISCORD_RPC
     updateDiscordRPC();
     #end

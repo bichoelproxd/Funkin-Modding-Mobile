@@ -11,6 +11,7 @@ import funkin.ui.debug.charting.ChartEditorState;
 import funkin.util.logging.CrashHandler;
 import flixel.addons.transition.FlxTransitionableState;
 import funkin.util.FileUtil;
+import flixel.util.FlxColor;
 
 class DebugMenuSubState extends MusicBeatSubState
 {
@@ -66,11 +67,16 @@ class DebugMenuSubState extends MusicBeatSubState
     #if FEATURE_RESULTS_DEBUG
     createItem("RESULTS SCREEN DEBUG", openTestResultsScreen);
     #end
-    #if sys
+    #if (sys && !mobile)
     createItem("OPEN CRASH LOG FOLDER", openLogFolder);
     #end
     onMenuChange(items.members[0]);
     FlxG.camera.focusOn(new FlxPoint(camFocusPoint.x, camFocusPoint.y + 500));
+
+    #if FEATURE_TOUCH_CONTROLS
+    // There's no keyboard to press ESC with on mobile.
+    addBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exitDebugMenu, 1.0);
+    #end
 
     #if FEATURE_HAXEUI
     // Remove the "user" stylesheet to prevent components using incorrect style data when entering an editor.
@@ -146,7 +152,7 @@ class DebugMenuSubState extends MusicBeatSubState
   }
   #end
 
-  #if sys
+  #if (sys && !mobile)
   function openLogFolder()
   {
     FileUtil.openFolder(CrashHandler.LOG_FOLDER);

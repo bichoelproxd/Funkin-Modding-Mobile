@@ -127,9 +127,25 @@ class FunkinCamera extends FlxCamera
     crossCameraBlending = false;
   }
 
+  /**
+   * Drops the visual effect shaders during gameplay when the player disabled them in the preferences.
+   *
+   * - Outside of `PlayState` shaders are always kept, since menus rely on them (masks, outlines, etc).
+   * - The custom blend shader is always kept, since blend modes depend on it.
+   */
+  inline function filterShader(shader:Null<FlxShader>):Null<FlxShader>
+  {
+    if (shader == null || Preferences.shaders) return shader;
+    if (!Std.isOfType(FlxG.state, funkin.play.PlayState)) return shader;
+
+    return Std.isOfType(shader, RuntimeCustomBlendShader) ? shader : null;
+  }
+
   override function drawPixels(?frame:FlxFrame, ?pixels:BitmapData, matrix:FlxMatrix, ?transform:ColorTransform, ?blend:BlendMode, ?smoothing:Bool = false,
       ?shader:FlxShader):Void
   {
+    shader = filterShader(shader);
+
     var shouldUseShader:Bool = (!hasKhronosExtension && KHR_BLEND_MODES.contains(blend)) || SHADER_REQUIRED_BLEND_MODES.contains(blend);
 
     // Fallback to the shader implementation if the device doesn't support `KHR_blend_equation_advanced`, or if
@@ -220,6 +236,8 @@ class FunkinCamera extends FlxCamera
   override function startQuadBatch(graphic:FlxGraphic, colored:Bool, hasColorOffsets:Bool = false, ?blend:BlendMode, smooth:Bool = false,
       ?shader:FlxShader):FlxDrawQuadsItem
   {
+    shader = filterShader(shader);
+
     // Can't batch complex non-coherent blends, so always force a new batch
     if (hasKhronosExtension && !(OpenGLRenderer.__coherentBlendsSupported ?? false) && KHR_BLEND_MODES.contains(blend))
     {
@@ -272,6 +290,8 @@ class FunkinCamera extends FlxCamera
   override function startTrianglesBatch(graphic:FlxGraphic, smoothing:Bool = false, isColored:Bool = false, ?blend:BlendMode, ?hasColorOffsets:Bool,
       ?shader:FlxShader):FlxDrawTrianglesItem
   {
+    shader = filterShader(shader);
+
     // Can't batch complex non-coherent blends, so always force a new batch
     if (hasKhronosExtension
       && !(OpenGLRenderer.__coherentBlendsSupported ?? false)

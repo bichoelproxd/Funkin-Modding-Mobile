@@ -77,7 +77,7 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     });
 
     #if FEATURE_TOUCH_CONTROLS
-    var backButton:FunkinBackButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exit, 1.0);
+    var backButton:FunkinBackButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exit, 1.0);
     add(backButton);
     #end
   }
@@ -159,6 +159,11 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     {
       Preferences.subtitles = value;
     }, Preferences.subtitles);
+    createPrefItemCheckbox('Shaders', 'When disabled, shader effects are turned off during songs. Can improve performance on low-end devices.',
+      function(value:Bool):Void
+      {
+        Preferences.shaders = value;
+      }, Preferences.shaders);
     #if FEATURE_DEBUG_DISPLAY
     // note: technically we can do DebugDisplayMode.Advanced => DebugDisplayMode.Advanced, etc. here, but that's a bit headache inducing.
     createPrefItemEnum('Debug Display', 'When enabled, FPS and other debug stats are displayed.', [

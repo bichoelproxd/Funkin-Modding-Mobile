@@ -105,6 +105,7 @@ class Save implements ConsoleClass
         debugDisplay: 'Off',
         debugDisplayBGOpacity: 50,
         subtitles: true,
+        shaders: true,
         hapticsMode: 'All',
         hapticsIntensityMultiplier: 1,
         autoPause: true,
@@ -1150,6 +1151,13 @@ typedef SaveDataOptions =
    * @default `true`
    */
   var subtitles:Bool;
+
+  /**
+   * If disabled, visual shader effects are not rendered during songs.
+   * Useful for improving performance on low-end devices.
+   * @default `true`
+   */
+  var shaders:Bool;
 
   /**
    * If enabled, haptic feedback will be enabled.

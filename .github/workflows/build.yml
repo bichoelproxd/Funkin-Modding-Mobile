@@ -1,0 +1,214 @@
+# Builds the Android APKs of the game on GitHub-hosted runners.
+#
+# Three APKs are produced on every run:
+#   1. universal    -> contains both armeabi-v7a and arm64-v8a
+#   2. armeabi-v7a  -> 32-bit ARM only (older devices)
+#   3. arm64-v8a    -> 64-bit ARM only (most modern devices)
+#
+# The APKs are uploaded as workflow artifacts. Run it manually from the
+# "Actions" tab (Build Android APKs -> Run workflow) or just push to the repo.
+#
+# Optional repository secrets for signing with your own key
+# (if they are missing, a throwaway keystore is generated for each run):
+#   ANDROID_KEYSTORE_BASE64    base64 of your .keystore / .jks file
+#   ANDROID_KEYSTORE_ALIAS     key alias
+#   ANDROID_KEYSTORE_PASSWORD  store + key password
+
+name: Build Android APKs
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-defines:
+        type: string
+        description: Extra build defines (e.g. -DFEATURE_DEBUG_FUNCTIONS)
+        default: '-DGITHUB_BUILD'
+      compress-textures:
+        type: boolean
+        description: Enable ASTC texture compression (slower build, lower memory usage)
+        default: false
+  push:
+    branches-ignore:
+      - 'gh-pages'
+  pull_request:
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HAXE_VERSION: 4.3.7
+  JAVA_VERSION: '17'
+  ANDROID_NDK_VERSION: 29.0.13113456
+  # Community builds can't use the Play Store services, so they are always disabled here.
+  BASE_DEFINES: >-
+    -DNO_FEATURE_MOBILE_ADVERTISEMENTS
+    -DNO_FEATURE_MOBILE_IAP
+    -DNO_FEATURE_MOBILE_IAR
+    -DNO_FEATURE_MOBILE_AGESIGNALS
+
+jobs:
+  build-apk:
+    name: APK (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: universal
+            arch-defines: ''
+          - name: armeabi-v7a
+            arch-defines: '-DEXCLUDE_ARM64'
+          - name: arm64-v8a
+            arch-defines: '-DEXCLUDE_ARMV7'
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: ${{ env.HAXE_VERSION }}
+
+      - name: Setup Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            build-tools;35.0.0
+            platforms;android-29
+            platforms;android-35
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+
+      - name: Restore cached Haxe dependencies
+        id: cache-haxelib
+        uses: actions/cache@v4
+        with:
+          path: .haxelib
+          key: haxelib-android-${{ runner.os }}-${{ hashFiles('hmm.json') }}
+
+      - name: Configure haxelib
+        run: |
+          mkdir -p "$HOME/haxelib"
+          haxelib setup "$HOME/haxelib"
+          haxelib --never --global git haxelib https://github.com/FunkinCrew/haxelib.git funkin-patches --skip-dependencies
+          haxelib --never --global git hmm https://github.com/FunkinCrew/hmm funkin-patches
+          haxelib --never newrepo
+          haxelib version
+
+      - name: Install Haxe dependencies
+        if: steps.cache-haxelib.outputs.cache-hit != 'true'
+        run: |
+          git config --global advice.detachedHead false
+          haxelib --global run hmm install -q
+          haxelib --global list
+
+      - name: Compile hxcpp tools
+        run: |
+          pushd .haxelib/hxcpp/git/tools/hxcpp
+          haxe compile.hxml
+          popd
+
+      - name: Configure lime for Android
+        run: |
+          haxelib --always run lime setup
+          haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          haxelib run lime config JAVA_HOME "$JAVA_HOME"
+          haxelib run lime config ANDROID_SETUP true
+          haxelib run lime config
+
+      - name: Restore cached lime native libraries
+        id: cache-lime
+        uses: actions/cache@v4
+        with:
+          path: .haxelib/lime/git/ndll
+          key: lime-ndll-android-${{ runner.os }}-${{ hashFiles('hmm.json') }}
+
+      - name: Rebuild lime native libraries (only if they are missing)
+        run: |
+          if find .haxelib/lime/git/ndll -ipath '*android*' -name '*.so' 2>/dev/null | grep -q .; then
+            echo "Android native libraries already present, skipping rebuild."
+          else
+            haxelib run lime rebuild android -release
+          fi
+
+      - name: Prepare signing configuration
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS_SECRET: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD_SECRET: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/fnf-release.keystore"
+
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_ALIAS_SECRET" ] && [ -n "$KEYSTORE_PASSWORD_SECRET" ]; then
+            echo "Using the keystore from repository secrets."
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            KEYSTORE_ALIAS="$KEYSTORE_ALIAS_SECRET"
+            KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD_SECRET"
+          else
+            echo "No signing secrets found, generating a throwaway keystore."
+            KEYSTORE_ALIAS=fnfci
+            KEYSTORE_PASSWORD="$(openssl rand -hex 16)"
+            keytool -genkeypair -noprompt \
+              -keystore "$KEYSTORE_PATH" \
+              -alias "$KEYSTORE_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEYSTORE_PASSWORD" \
+              -dname "CN=FNF CI, O=FNF, C=US"
+          fi
+
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          {
+            echo "KEYSTORE_PATH=$KEYSTORE_PATH"
+            echo "KEYSTORE_ALIAS=$KEYSTORE_ALIAS"
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+          } > .env
+
+      - name: Build APK (${{ matrix.name }})
+        env:
+          USER_DEFINES: ${{ github.event.inputs.build-defines || '-DGITHUB_BUILD' }}
+          COMPRESS_TEXTURES: ${{ github.event.inputs.compress-textures || 'false' }}
+        run: |
+          DEFINES="$BASE_DEFINES $USER_DEFINES ${{ matrix.arch-defines }}"
+          if [ "$COMPRESS_TEXTURES" != "true" ]; then
+            DEFINES="$DEFINES -DNO_FEATURE_COMPRESSED_TEXTURES"
+          fi
+          echo "Build defines: $DEFINES"
+          haxelib run lime build android -release -v $DEFINES
+        timeout-minutes: 150
+
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          # Prefer the signed release APK and never pick an unsigned one.
+          APK="$(find export/release/android -type f -name '*.apk' ! -name '*unsigned*' ! -name '*debug*' | sort | head -n 1)"
+          if [ -z "$APK" ]; then
+            echo "::error::No release APK was found in export/release/android"
+            find export/release/android -type f -name '*.apk' || true
+            exit 1
+          fi
+          echo "Found: $APK"
+          cp "$APK" "dist/FNF-${{ matrix.name }}.apk"
+          ls -lh dist
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FNF-${{ matrix.name }}-apk
+          path: dist/FNF-${{ matrix.name }}.apk
+          if-no-files-found: error
+          retention-days: 30
