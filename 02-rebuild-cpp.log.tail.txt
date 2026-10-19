@@ -1,0 +1,20 @@
+_/\\\\\\______________________________________________
+_\////\\\______________________________________________
+_____\/\\\_____/\\\_____________________________________
+______\/\\\____\///_____/\\\\\__/\\\\\_______/\\\\\\\\___
+_______\/\\\_____/\\\__/\\\///\\\\\///\\\___/\\\/////\\\__
+________\/\\\____\/\\\_\/\\\_\//\\\__\/\\\__/\\\\\\\\\\\___
+_________\/\\\____\/\\\_\/\\\__\/\\\__\/\\\_\//\\///////____
+________/\\\\\\\\\_\/\\\_\/\\\__\/\\\__\/\\\__\//\\\\\\\\\\__
+________\/////////__\///__\///___\///___\///____\//////////___
+
+Lime Command-Line Tools (8.3.1)
+
+Initializing project...
+Reading Lime config: /home/runner/.lime/config.xml
+
+Running command: REBUILD
+Generating Wayland Protocols (27 files)
+ - lib/sdl/wayland-generated-protocols/cursor-shape-v1.xml
+ - Running command: wayland-scanner client-header /home/runner/work/Funkin-Modding-Mobile/Funkin-Modding-Mobile/.haxelib/lime/git/project/lib/sdl/wayland-protocols/cursor-shape-v1.xml /home/runner/work/Funkin-Modding-Mobile/Funkin-Modding-Mobile/.haxelib/lime/git/project/lib/sdl/wayland-generated-protocols/cursor-shape-v1-client-protocol.h
+sh: 1: wayland-scanner: not found
