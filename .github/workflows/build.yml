@@ -32,6 +32,9 @@ on:
       - 'gh-pages'
   pull_request:
 
+permissions:
+  contents: write
+
 concurrency:
   group: build-apk-${{ github.ref }}
   cancel-in-progress: true
@@ -170,14 +173,17 @@ jobs:
             libgl-dev libgl1-mesa-dev libasound2-dev libpulse-dev
 
       - name: Prepare hxcpp
-        run: haxelib run lime rebuild hxcpp
+        run: |
+          mkdir -p ci-logs
+          haxelib run lime rebuild hxcpp 2>&1 | tee ci-logs/01-rebuild-hxcpp.log
 
       - name: Build lime native library for the runner (lime.ndll)
         run: |
           if find .haxelib/lime/git/ndll -ipath '*linux*' -name 'lime.ndll' 2>/dev/null | grep -q .; then
             echo "lime.ndll already present (restored from cache), skipping rebuild."
           else
-            haxelib run lime rebuild cpp -64
+            mkdir -p ci-logs
+            haxelib run lime rebuild cpp -64 -v 2>&1 | tee ci-logs/02-rebuild-cpp.log
           fi
           find .haxelib/lime/git/ndll -name '*.ndll' | sort
 
@@ -186,7 +192,8 @@ jobs:
           if find .haxelib/lime/git/ndll -ipath '*android*' -name '*.so' 2>/dev/null | grep -q .; then
             echo "Android native libraries already present, skipping rebuild."
           else
-            haxelib run lime rebuild android -release
+            mkdir -p ci-logs
+            haxelib run lime rebuild android -release -v 2>&1 | tee ci-logs/03-rebuild-android.log
           fi
 
       - name: Prepare signing configuration
@@ -231,7 +238,8 @@ jobs:
             DEFINES="$DEFINES -DNO_FEATURE_COMPRESSED_TEXTURES"
           fi
           echo "Build defines: $DEFINES"
-          haxelib run lime build android -release -v $DEFINES
+          mkdir -p ci-logs
+          haxelib run lime build android -release -v $DEFINES 2>&1 | tee ci-logs/04-build-${{ matrix.name }}.log
         timeout-minutes: 150
 
       - name: Collect APK
@@ -255,3 +263,28 @@ jobs:
           path: dist/FNF-${{ matrix.name }}.apk
           if-no-files-found: error
           retention-days: 30
+
+      # TEMPORARY: the raw Actions logs can't be downloaded from the dev environment,
+      # so when a step fails the command logs are pushed to a throwaway branch.
+      # Delete this step (and the `permissions` block) once the build is green.
+      - name: Publish logs of the failed build
+        if: failure() && matrix.name == 'universal'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          mkdir -p ci-logs
+          ls -la ci-logs
+          OUT="$RUNNER_TEMP/logs-branch"
+          rm -rf "$OUT"; mkdir -p "$OUT"; cd "$OUT"
+          git init -q
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          for f in "$GITHUB_WORKSPACE"/ci-logs/*.log; do
+            [ -f "$f" ] || continue
+            tail -n 4000 "$f" > "$(basename "$f").tail.txt"
+          done
+          echo "run=$GITHUB_RUN_ID sha=$GITHUB_SHA" > INFO.txt
+          git add -A
+          git commit -q -m "CI logs for run $GITHUB_RUN_ID"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-logs-latest
