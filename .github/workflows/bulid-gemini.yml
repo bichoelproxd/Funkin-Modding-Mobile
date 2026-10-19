@@ -55,7 +55,7 @@ jobs:
             ${{ env.ANDROID_SDK_ROOT }}/ndk
             ${{ env.ANDROID_SDK_ROOT }}/platforms
             ${{ env.ANDROID_SDK_ROOT }}/build-tools
-          key: android-sdk-ndk27.2.12479018-platform35-buildtools35.0.0
+          key: android-sdk-${{ matrix.arch.name }}-ndk27.2.12479018-platform35-buildtools35.0.0
 
       - name: Install Android SDK
         if: steps.cache-android-sdk.outputs.cache-hit != 'true'
@@ -112,9 +112,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .haxelib
-          key: haxelib-android-${{ hashFiles('hmm.json') }}
+          key: v2-haxelib-android-${{ matrix.arch.name }}-${{ hashFiles('hmm.json') }}
           restore-keys: |
-            haxelib-android-
+            v2-haxelib-android-${{ matrix.arch.name }}-
 
       - name: Install HMM
         shell: bash
@@ -135,7 +135,9 @@ jobs:
       - name: Rebuild Lime
         if: steps.cache-haxelib.outputs.cache-hit != 'true'
         shell: bash
-        run: haxelib run lime rebuild cpp
+        run: |
+          haxelib run lime rebuild linux
+          haxelib run lime rebuild tools
 
       - name: Setup Lime Android
         shell: bash
