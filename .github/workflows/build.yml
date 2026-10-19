@@ -122,65 +122,66 @@ jobs:
           haxe compile.hxml
           popd
 
-      # NOTE: `lime setup` is intentionally NOT run. Without a platform it tries to
-      # reinstall/update lime's dependencies (breaking the versions pinned in hmm.json)
-      # and to copy a `lime` alias with sudo. Lime's tools (run.n/tools.n) already ship
-      # inside the lime checkout, so only the Android paths need to be written. This is
-      # the same thing docs/setup-android-win64.bat does.
-      - name: Check Android tool paths
+      # Same sequence as docs/COMPILING_MOBILE.md and the FunkinCrew/Funkin#5949
+      # guide (JDK 17, build-tools 35.0.0, NDK 29.0.13113456, platforms 29 + 35),
+      # but non-interactive: `lime setup android` asks for the paths on stdin, so
+      # they are written to lime's config file instead.
+      - name: Tell lime where the Android SDK, NDK and JDK are
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "NDK=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
-          ls "$ANDROID_HOME/ndk" || true
-          test -d "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          NDK_PATH="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          echo "SDK: $ANDROID_HOME"
+          echo "NDK: $NDK_PATH"
+          echo "JDK: $JAVA_HOME"
+          test -d "$ANDROID_HOME"
+          test -d "$NDK_PATH"
           test -d "$JAVA_HOME"
-          haxelib path lime
 
-      # TEMPORARY diagnostics: publishes command output as annotations so the failure
-      # reason is visible without opening the raw logs. Remove once the build works.
-      - name: Diagnose lime
-        continue-on-error: true
+          mkdir -p "$HOME/.lime"
+          cat > "$HOME/.lime/config.xml" <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <config>
+          	<section id="defines">
+          		<set name="ANDROID_SDK" value="$ANDROID_HOME" />
+          		<set name="ANDROID_NDK_ROOT" value="$NDK_PATH" />
+          		<set name="JAVA_HOME" value="$JAVA_HOME" />
+          		<set name="ANDROID_SETUP" value="true" />
+          	</section>
+          </config>
+          EOF
+          # Lime also reads these from the environment, so export them for later steps.
+          {
+            echo "ANDROID_SDK=$ANDROID_HOME"
+            echo "ANDROID_NDK_ROOT=$NDK_PATH"
+            echo "ANDROID_SETUP=true"
+            echo "LIME_CONFIG=$HOME/.lime/config.xml"
+          } >> "$GITHUB_ENV"
+          cat "$HOME/.lime/config.xml"
+
+      # Lime installed from git ships without its native library (lime.ndll), and
+      # every `lime` command that touches the config or builds a project fails with
+      # "Could not load lime.ndll" until it is compiled for the build machine (Linux).
+      # This is the same thing the repo's own CI does (`lime rebuild cpp -64`).
+      - name: Install native build dependencies
         run: |
-          diag() {
-            local title="$1"; shift
-            local out rc
-            out="$("$@" 2>&1)"; rc=$?
-            out="rc=$rc"$'\n'"$out"
-            out="${out: -2500}"
-            out="${out//'%'/'%25'}"; out="${out//$'\n'/'%0A'}"; out="${out//$'\r'/'%0D'}"
-            echo "::warning title=DIAG $title::$out"
-          }
-          LIME_DIR="$(haxelib libpath lime | head -n 1)"
-          diag neko neko -version
-          diag haxe haxe -version
-          diag lime-dir bash -c "echo '$LIME_DIR'; ls -la '$LIME_DIR' | head -30; ls -la '$LIME_DIR/tools' | head -20; ls '$LIME_DIR/ndll'"
-          diag lime-run-config haxelib run lime config
-          diag tools-n-direct neko "$LIME_DIR/tools/tools.n" config
-          diag lime-config-set haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++ gcc-multilib g++-multilib \
+            libx11-dev libxi-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libgl-dev libgl1-mesa-dev libasound2-dev libpulse-dev
 
-      - name: Configure lime SDK path
-        run: haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+      - name: Prepare hxcpp
+        run: haxelib run lime rebuild hxcpp
 
-      - name: Configure lime NDK path
-        run: haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
-
-      - name: Configure lime Java path
-        run: haxelib run lime config JAVA_HOME "$JAVA_HOME"
-
-      - name: Finish lime Android configuration
+      - name: Build lime native library for the runner (lime.ndll)
         run: |
-          haxelib run lime config ANDROID_SETUP true
-          haxelib run lime config || true
+          if find .haxelib/lime/git/ndll -ipath '*linux*' -name 'lime.ndll' 2>/dev/null | grep -q .; then
+            echo "lime.ndll already present (restored from cache), skipping rebuild."
+          else
+            haxelib run lime rebuild cpp -64
+          fi
+          find .haxelib/lime/git/ndll -name '*.ndll' | sort
 
-      - name: Restore cached lime native libraries
-        id: cache-lime
-        uses: actions/cache@v4
-        with:
-          path: .haxelib/lime/git/ndll
-          key: lime-ndll-android-${{ runner.os }}-${{ hashFiles('hmm.json') }}
-
-      - name: Rebuild lime native libraries (only if they are missing)
+      - name: Build lime native libraries for Android (only if they are missing)
         run: |
           if find .haxelib/lime/git/ndll -ipath '*android*' -name '*.so' 2>/dev/null | grep -q .; then
             echo "Android native libraries already present, skipping rebuild."
