@@ -122,14 +122,34 @@ jobs:
           haxe compile.hxml
           popd
 
-      - name: Configure lime for Android
+      # NOTE: `lime setup` is intentionally NOT run. Without a platform it tries to
+      # reinstall/update lime's dependencies (breaking the versions pinned in hmm.json)
+      # and to copy a `lime` alias with sudo. Lime's tools (run.n/tools.n) already ship
+      # inside the lime checkout, so only the Android paths need to be written. This is
+      # the same thing docs/setup-android-win64.bat does.
+      - name: Check Android tool paths
         run: |
-          haxelib --always run lime setup
-          haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
-          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
-          haxelib run lime config JAVA_HOME "$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "NDK=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          ls "$ANDROID_HOME/ndk" || true
+          test -d "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          test -d "$JAVA_HOME"
+          haxelib path lime
+
+      - name: Configure lime SDK path
+        run: haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+
+      - name: Configure lime NDK path
+        run: haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+
+      - name: Configure lime Java path
+        run: haxelib run lime config JAVA_HOME "$JAVA_HOME"
+
+      - name: Finish lime Android configuration
+        run: |
           haxelib run lime config ANDROID_SETUP true
-          haxelib run lime config
+          haxelib run lime config || true
 
       - name: Restore cached lime native libraries
         id: cache-lime
