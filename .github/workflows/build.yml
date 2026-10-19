@@ -167,10 +167,21 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            g++ gcc-multilib g++-multilib \
-            libx11-dev libxi-dev libxext-dev libxinerama-dev libxrandr-dev \
-            libgl-dev libgl1-mesa-dev libasound2-dev libpulse-dev
+          # Lime's bundled SDL is compiled from source, which needs the usual X11 /
+          # Wayland / audio development packages (wayland-scanner lives in
+          # libwayland-bin). Installed one by one so a package that is renamed on a
+          # newer Ubuntu doesn't abort the rest.
+          for pkg in \
+            g++ gcc-multilib g++-multilib pkg-config \
+            libwayland-dev libwayland-bin wayland-protocols libxkbcommon-dev libdecor-0-dev \
+            libx11-dev libxi-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxss-dev libxtst-dev libxrender-dev \
+            libgl-dev libgl1-mesa-dev libegl-dev libgles-dev libdrm-dev libgbm-dev \
+            libasound2-dev libpulse-dev libudev-dev libdbus-1-dev libibus-1.0-dev
+          do
+            sudo apt-get install -y --no-install-recommends "$pkg" || echo "::warning::could not install $pkg"
+          done
+          which wayland-scanner
 
       - name: Prepare hxcpp
         run: |
